@@ -9,6 +9,9 @@ import {
 } from 'nestjs-telegraf';
 import { Context, Markup } from 'telegraf';
 import { BotService } from './bot.service';
+import { UseFilters, UseGuards } from '@nestjs/common';
+import { AdminGuard } from '../guards/admin.guard';
+import { TelegrafExceptionFilter } from '../filters/telegraf-exception.filter';
 
 @Update()
 export class BotUpdate {
@@ -16,6 +19,13 @@ export class BotUpdate {
   @Start()
   async oneStart(@Ctx() ctx: Context) {
     await this.botService.start(ctx);
+  }
+
+  @UseFilters(TelegrafExceptionFilter)
+  @UseGuards(AdminGuard)
+  @Command('admin')
+  async onAdminCommand(@Ctx() ctx: Context) {
+    await this.botService.admin_menu(ctx, `Xush kelibsiz, ADMIN`);
   }
 
   @On('contact')
@@ -38,14 +48,19 @@ export class BotUpdate {
     await this.botService.showCategory(ctx);
   }
 
-  @Hears('Bekor qilish❌')
+  @Action('cancel_master')
   async cancelMasters(@Ctx() ctx: Context) {
     await this.botService.cancelMasters(ctx);
   }
 
-  @Hears('Tasdiqlash✅')
+  @Hears('Adminga yuborish✅')
   async adminCheckingMasterInfo(@Ctx() ctx: Context) {
     await this.botService.adminCheckingMasterInfo(ctx);
+  }
+
+  @Action('confirm_master')
+  async adminCheckedMaster(@Ctx() ctx: Context) {
+    await this.botService.adminCheckedMaster(ctx);
   }
 
   @Action(/category_+\d/)
@@ -53,10 +68,10 @@ export class BotUpdate {
     await this.botService.onClickAnyCategory(ctx);
   }
 
-    @Hears('Client')
-    async addNewClient(@Ctx() ctx: Context) {
-      await this.botService.addNewClient(ctx);
-    }
+  @Hears('Client')
+  async addNewClient(@Ctx() ctx: Context) {
+    await this.botService.addNewClient(ctx);
+  }
 
   @On('location')
   async onLocation(@Ctx() ctx: Context) {

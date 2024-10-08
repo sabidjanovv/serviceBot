@@ -177,7 +177,6 @@ export class BotService {
       category_name: category.name,
       last_state: 'name',
     });
-    console.log(category.name);
     await ctx.reply(`Ismingizni kiriting:`, {
       parse_mode: 'HTML',
       ...Markup.removeKeyboard(),
@@ -240,6 +239,8 @@ export class BotService {
             master.name = ctx.message.text;
             master.last_state = 'phone_number';
             await master.save();
+            console.log(master.last_state);
+
             await ctx.reply(
               `Telefon raqamingizni kiriting yoki qo'shimcha raqam kiriting:`,
               {
@@ -308,7 +309,7 @@ export class BotService {
             await master.save();
             await ctx.reply(`Ma'lumotlarni tasdiqlaysizmi?: `, {
               parse_mode: 'HTML',
-              ...Markup.keyboard([['Tasdiqlash✅', 'Bekor qilish❌']])
+              ...Markup.keyboard([['Adminga yuborish✅', 'Bekor qilish❌']])
                 .resize()
                 .oneTime(),
             });
@@ -328,21 +329,87 @@ export class BotService {
       await Master.destroy({
         where: { user_id: userId },
       });
-      await ctx.reply(`Ma'lumotlaringiz tozalandi!`, {
-        parse_mode: 'HTML',
-        ...Markup.keyboard([['/start']])
-          .resize()
-          .oneTime(),
-      });
+      await ctx.telegram.sendMessage(
+        master.user_id,
+        `Ma'lumotlaringiz layoqli deb topilmadi!`,
+        {
+          parse_mode: 'HTML',
+          ...Markup.keyboard([['/start']])
+            .resize()
+            .oneTime(),
+        },
+      );
     }
   }
 
+  //ORIGINAL
   async adminCheckingMasterInfo(ctx: Context) {
     const userId = ctx.from.id;
     const master = await Master.findOne({
       where: { user_id: userId },
       order: [['id', 'DESC']],
     });
+
+    if (master) {
+      const masterData = `
+      <b>Master Info:</b>
+      User ID: ${master.user_id}
+      Name: ${master.name}
+      Phone Number: ${master.phone_number}
+      Work Place: ${master.work_place_name}
+      Address Name: ${master.address_name}
+      Address: ${master.address}
+      Location: ${master.location}
+      Start Time: ${master.start_time}
+      End Time: ${master.end_time}
+      Avg Time per Client: ${master.avg_time_client}
+    `;
+      const groupChatId = '-1002491862389';
+      await ctx.telegram.sendMessage(
+        groupChatId,
+        masterData,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: '✅Tasdiqlash',
+                  callback_data: `confirm_master`,
+                },
+                {
+                  text: 'Bekor qilish❌',
+                  callback_data: `cancel_master`,
+                },
+              ],
+            ],
+          },
+        },
+      );
+    } else {
+      await ctx.reply(`Master information not found.`);
+    }
+  }
+
+  async adminCheckedMaster(ctx: Context) {
+    const userId = ctx.from.id;
+    const master = await Master.findOne({
+      where: { user_id: userId },
+      order: [['id', 'DESC']],
+    });
+    if (master) {
+      master.is_active = true;
+      await master.save();
+
+      await ctx.telegram.sendMessage(
+        master.user_id,
+        `Ma'lumotlaringiz <b>Admin</b> tomondan tekshirildi va muvaffaqiyatli tasdiqlandi!☺️`,
+        {
+          parse_mode: 'HTML',
+          ...Markup.removeKeyboard(),
+        },
+      );
+    }
+    // CONTINUE
   }
 
   async onLocation(ctx: Context) {
@@ -373,6 +440,19 @@ export class BotService {
           }
         }
       }
+    }
+  }
+
+  async admin_menu(ctx: Context, menu_text = `<b>Admin menyusi</b>`) {
+    try {
+      await ctx.reply(menu_text, {
+        parse_mode: 'HTML',
+        ...Markup.keyboard([['Master', 'Client']])
+          .oneTime()
+          .resize(),
+      });
+    } catch (error) {
+      console.log('Admin menyusida xatolik', error);
     }
   }
 }
