@@ -29,52 +29,42 @@ export class BotService {
         last_name: ctx.from.last_name,
         lang: ctx.from.language_code,
       });
-      await ctx.reply(
-        `Iltimos, <b>"📱 Telefon raqamni yuboring" tugmasini bosing</b>`,
-        {
-          parse_mode: 'HTML',
-          ...Markup.keyboard([
-            [Markup.button.contactRequest('📱 Telefon raqamni yuboring')],
-          ])
-            .resize()
-            .oneTime(),
-        },
-      );
-    } else if (!user.status) {
-      await ctx.reply(
-        `Iltimos, <b>"📱 Telefon raqamni yuboring" tugmasini bosing</b>`,
-        {
-          parse_mode: 'HTML',
-          ...Markup.keyboard([
-            [Markup.button.contactRequest('📱 Telefon raqamni yuboring')],
-          ])
-            .resize()
-            .oneTime(),
-        },
-      );
-    } else {
-      await ctx.reply(
-        `Bu bot Master'lar qo'shish va ularni bro'n qilish uchun ishlatilinadi`,
-        {
-          parse_mode: 'HTML',
-          ...Markup.removeKeyboard(),
-        },
-      );
     }
+    await ctx.replyWithHTML(
+      `<i>Bu bot Master'lar qo'shish va ularni bro'n qilish uchun ishlatilinadi</i>\n\n<b>Bot'dan ro'yxattan o'ting: </b>`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "Ro'yxattan o'tish",
+                callback_data: `register`,
+              },
+            ],
+          ],
+        },
+      },
+    );
   }
 
   async onContact(ctx: Context) {
-    if ('contact' in ctx.message) {
-      const userId = ctx.from.id;
-      const user = await this.botModel.findByPk(userId);
-      if (!user) {
-        await ctx.reply(`Iltimos, Start tugmasini bosing`, {
-          parse_mode: 'HTML',
-          ...Markup.keyboard([['/start']])
-            .resize()
-            .oneTime(),
-        });
-      } else if (ctx.message.contact.user_id != userId) {
+    const userId = ctx.from.id;
+    const user = await this.botModel.findByPk(userId);
+    const master = await Master.findOne({
+      where: { user_id: userId },
+      order: [['id', 'DESC']],
+    });
+
+    if (!user) {
+      await ctx.reply(`Iltimos, Start tugmasini bosing`, {
+        parse_mode: 'HTML',
+        ...Markup.keyboard([['/start']])
+          .resize()
+          .oneTime(),
+      });
+    } else if ('contact' in ctx.message) {
+      // Agar contact mavjud bo'lsa
+      if (ctx.message.contact.user_id != userId) {
         await ctx.reply(`Iltimos, O'zingizni telefon raqamingizni yuboring!`, {
           parse_mode: 'HTML',
           ...Markup.keyboard([
@@ -83,7 +73,12 @@ export class BotService {
             .resize()
             .oneTime(),
         });
-      } else {
+      } else if (ctx.message.contact.user_id == userId) {
+        if (master) {
+          master.phone_number = ctx.message.contact.phone_number;
+          master.last_state = "work_place_name"
+          await master.save(); // Master'ni saqlash
+        }
         await this.botModel.update(
           {
             phone_number: ctx.message.contact.phone_number,
@@ -93,25 +88,16 @@ export class BotService {
             where: { user_id: userId },
           },
         );
-        await this.bot.telegram.sendChatAction(user.user_id, 'typing');
-        await ctx.reply(`Tabriklayman siz faollashtirildingiz`, {
-          parse_mode: 'HTML',
-          ...Markup.removeKeyboard(),
-        });
-
-        await this.bot.telegram.sendChatAction(user.user_id, 'typing');
-        await ctx.replyWithHTML(`<b>Bot'dan ro'yxattan o'ting: </b>`, {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: "Ro'yxattan o'tish",
-                  callback_data: `register`,
-                },
-              ],
-            ],
-          },
-        });
+      }
+       await ctx.reply(`🏢Ish joyingiz nomini kiriting:`, {
+         parse_mode: 'HTML',
+         ...Markup.removeKeyboard(),
+       });
+    } else if ('text' in ctx.message) {
+      // Agar text yuborilgan bo'lsa
+      if (master) {
+        master.phone_number = ctx.message.text;
+        await master.save(); // Master'ni saqlash
       }
     }
   }
@@ -239,23 +225,15 @@ export class BotService {
             master.name = ctx.message.text;
             master.last_state = 'phone_number';
             await master.save();
-            console.log(master.last_state);
-
-            await ctx.reply(
-              `Telefon raqamingizni kiriting yoki qo'shimcha raqam kiriting:`,
-              {
-                parse_mode: 'HTML',
-                ...Markup.removeKeyboard(),
-              },
-            );
-          } else if (master.last_state === 'phone_number') {
-            master.phone_number = ctx.message.text;
-            master.last_state = 'work_place_name';
-            await master.save();
-            await ctx.reply(`Ish joyingiz nomini kiriting:`, {
+            await ctx.reply(`Telefon raqamingizni yuboring!`, {
               parse_mode: 'HTML',
-              ...Markup.removeKeyboard(),
+              ...Markup.keyboard([
+                [Markup.button.contactRequest('Master📱 Telefon raqamni yuboring')],
+              ])
+                .resize()
+                .oneTime(),
             });
+            console.log(master.last_state);
           } else if (master.last_state === 'work_place_name') {
             master.work_place_name = ctx.message.text;
             master.last_state = 'address_name';
@@ -268,7 +246,7 @@ export class BotService {
             master.address_name = ctx.message.text;
             master.last_state = 'address';
             await master.save();
-            await ctx.reply(`Manzilni kiriting:`, {
+            await ctx.reply(`📍Orienter nomini kiriting:`, {
               parse_mode: 'HTML',
               ...Markup.removeKeyboard(),
             });
@@ -342,7 +320,6 @@ export class BotService {
     }
   }
 
-  //ORIGINAL
   async adminCheckingMasterInfo(ctx: Context) {
     const userId = ctx.from.id;
     const master = await Master.findOne({
@@ -365,26 +342,22 @@ export class BotService {
       Avg Time per Client: ${master.avg_time_client}
     `;
       const groupChatId = '-1002491862389';
-      await ctx.telegram.sendMessage(
-        groupChatId,
-        masterData,
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: '✅Tasdiqlash',
-                  callback_data: `confirm_master`,
-                },
-                {
-                  text: 'Bekor qilish❌',
-                  callback_data: `cancel_master`,
-                },
-              ],
+      await ctx.telegram.sendMessage(groupChatId, masterData, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: '✅Tasdiqlash',
+                callback_data: `confirm_master`,
+              },
+              {
+                text: 'Bekor qilish❌',
+                callback_data: `cancel_master`,
+              },
             ],
-          },
+          ],
         },
-      );
+      });
     } else {
       await ctx.reply(`Master information not found.`);
     }
